@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Qurania Online – Quran Reader</title>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f6f8f7;--card:#fff;--ink:#14201d;--mute:#5b6b66;--line:#dce4e0;--brand:#0f5b52;--gold:#a8812c}
+[data-theme=dark]{--paper:#0e1513;--card:#151e1b;--ink:#e8efec;--mute:#9bada6;--line:#26332e;--brand:#4fb5a5;--gold:#d3ac52}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 Inter,system-ui,sans-serif}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+header.top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.bar{max-width:960px;margin:auto;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+.logo{font-weight:600;color:var(--brand)}
+main{max-width:960px;margin:auto;padding:28px 16px 140px}
+h1{font-size:2rem;margin:0 0 4px}
+.mute{color:var(--mute)}
+.ar{font-family:Amiri,"Noto Naskh Arabic",serif;direction:rtl;line-height:2.1}
+button,select,input[type=search]{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer}
+button:hover{border-color:var(--brand)}
+button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+input[type=search]{width:100%;padding:12px 16px;margin:20px 0;cursor:text}
+.grid{list-style:none;margin:0;padding:0;display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+.s{display:flex;align-items:center;gap:14px;padding:14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.s:hover{border-color:var(--brand)}
+.num{width:38px;height:38px;border:1px solid var(--gold);color:var(--gold);border-radius:50%;display:grid;place-items:center;font-size:.85rem;flex:none}
+.s .t{flex:1}.s .t b{display:block;font-weight:500}.s .t small{color:var(--mute)}
+.s .ar{font-size:1.4rem}
+.cont{display:flex;justify-content:space-between;align-items:center;background:var(--brand);color:#fff;border-radius:12px;padding:18px;margin-top:20px}
+.cont .ar{font-size:1.6rem}
+.err{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:16px 0}
+.hero{text-align:center;margin:10px 0 20px}.hero .ar{font-size:3rem;margin:0}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:20px}
+summary{cursor:pointer;font-weight:500}
+.opts{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-top:14px;font-size:.9rem}
+.opts label{display:block}.opts select{width:100%;margin-top:4px}
+.v{padding:22px 8px;border-bottom:1px solid var(--line);scroll-margin-top:80px;transition:background .3s}
+.v.on{background:color-mix(in srgb,var(--gold) 14%,transparent)}
+.v .ar{text-align:right;margin:0}
+.w{display:inline-flex;flex-direction:column;align-items:center;margin:0 8px 8px}
+.w small{font:12px/1.2 Inter,sans-serif;color:var(--mute);direction:ltr}
+.tr{margin:12px 0 0;max-width:68ch;font-size:15px;line-height:1.7}
+.tr.ur{direction:rtl;text-align:right;font-size:17px;max-width:none}
+.tr cite{display:block;font-size:12px;color:var(--mute);font-style:normal}
+.acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:.85rem}
+.acts button{padding:4px 12px}
+.player{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 16px;z-index:20}
+.player div{max-width:960px;margin:auto;display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:.9rem}
+.nav{display:flex;justify-content:space-between;margin-top:28px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="bar"><a class="logo" href="#/">Qurania Online</a>
+<div><a href="#/bookmarks" style="margin-right:14px">Bookmarks</a><button id="theme" aria-label="Switch theme">Dark</button></div></div></header>
+<main id="app" aria-live="polite"></main>
+<div class="player" id="player" hidden><div>
+<button id="prev" aria-label="Previous verse">Prev</button>
+<button id="pp" class="primary">Play / pause</button>
+<button id="next" aria-label="Next verse">Next</button>
+<label><input type="checkbox" id="loop"> Repeat verse</label>
+<label>Speed <select id="rate"><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option></select></label>
+<span id="now" class="mute"></span></div></div>
+<audio id="au"></audio>
+<script>
+const API="https://api.alquran.cloud/v1";
+const $=s=>document.querySelector(s),app=$("#app"),au=$("#au");
+const LS={get(k,d){try{const v=localStorage.getItem("qurania:"+k);return v?JSON.parse(v):d}catch{return d}},set(k,v){try{localStorage.setItem("qurania:"+k,JSON.stringify(v))}catch{}}};
+const S=Object.assign({size:34,trans:true,tr:[],rec:null,theme:"light"},LS.get("settings",{}));
+const save=()=>LS.set("settings",S);
+function applyTheme(){document.documentElement.dataset.theme=S.theme;$("#theme").textContent=S.theme==="dark"?"Light":"Dark"}
+$("#theme").onclick=()=>{S.theme=S.theme==="dark"?"light":"dark";save();applyTheme()};applyTheme();
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const cache={};
+async function get(p){if(cache[p])return cache[p];const r=await fetch(API+p);if(!r.ok)throw new Error("Request failed ("+r.status+")");const j=await r.json();if(j.code!==200)throw new Error(j.data||"API error");return cache[p]=j.data}
+const fail=e=>app.innerHTML=`<div class="err" role="alert"><b>Quran data could not be loaded</b><p class="mute">${esc(e.message)}. Check your internet connection and reload.</p></div>`;
+
+/* ---------- Home ---------- */
+async function home(){
+  app.innerHTML='<p class="mute">Loading surahs…</p>';
+  const chapters=await get("/surah");
+  const p=LS.get("progress",null),cur=p&&chapters.find(c=>c.number===p.surah);
+  app.innerHTML=`<h1>Read the Quran</h1><p class="mute">114 surahs with Urdu and English translation and recitation.</p>
+  ${cur?`<a class="cont" href="#/surah/${cur.number}/${p.verse}"><span><small style="opacity:.8">Continue reading</small><br><b>${esc(cur.englishName)}, verse ${p.verse}</b></span><span class="ar">${cur.name}</span></a>`:""}
+  <input type="search" id="q" placeholder="Search by name or number" aria-label="Search surahs">
+  <ul class="grid" id="list"></ul><p id="none" class="mute" hidden></p>`;
+  const draw=q=>{const f=chapters.filter(c=>(c.englishName+" "+c.englishNameTranslation+" "+c.name+" "+c.number).toLowerCase().includes(q.toLowerCase()));
+    $("#list").innerHTML=f.map(c=>`<li><a class="s" href="#/surah/${c.number}"><span class="num">${c.number}</span><span class="t"><b>${esc(c.englishName)}</b><small>${esc(c.englishNameTranslation)}, ${c.numberOfAyahs} verses, ${c.revelationType==="Meccan"?"Makki":"Madani"}</small></span><span class="ar">${c.name}</span></a></li>`).join("");
+    $("#none").hidden=f.length>0;$("#none").textContent=`No surah matches “${q}”. Try the English name or its number.`};
+  draw("");$("#q").oninput=e=>draw(e.target.value);
+}
+
+/* ---------- Surah ---------- */
+let V=[],audioMap={},active=null,chap=null;
+async function surah(id,verse){
+  if(!(id>=1&&id<=114))return app.innerHTML='<div class="err">Surah number must be between 1 and 114.</div>';
+  app.innerHTML='<p class="mute">Loading surah…</p>';
+  const [chapters,tAll,rAll]=await Promise.all([get("/surah"),get("/edition?format=text&type=translation"),get("/edition?format=audio&type=versebyverse")]);
+  const trs=tAll.filter(t=>["en","ur"].includes(t.language)),recs=rAll.filter(r=>r.language==="ar");
+  const ids=trs.map(t=>t.identifier);
+  S.tr=S.tr.filter(x=>ids.includes(x));
+  if(!S.tr.length)S.tr=[ids.includes("en.sahih")?"en.sahih":trs.find(t=>t.language==="en")?.identifier,ids.includes("ur.jalandhry")?"ur.jalandhry":trs.find(t=>t.language==="ur")?.identifier].filter(Boolean);
+  if(!recs.some(r=>r.identifier===S.rec))S.rec=recs.some(r=>r.identifier==="ar.alafasy")?"ar.alafasy":recs[0]?.identifier;
+  chap=chapters.find(c=>c.number===id);
+  const eds=await get(`/surah/${id}/editions/${["quran-uthmani",...S.tr].join(",")}`);
+  const ar=eds[0];
+  V=ar.ayahs.map((a,i)=>({key:id+":"+a.numberInSurah,n:a.numberInSurah,text:a.text,tr:eds.slice(1).map(e=>({ed:e.edition,text:e.ayahs[i].text}))}));
+  LS.set("recent",[id,...LS.get("recent",[]).filter(x=>x!==id)].slice(0,6));
+  const bm=LS.get("bookmarks",[]);
+  app.innerHTML=`<div class="hero"><h1 class="ar">${chap.name}</h1><p class="mute">${esc(chap.englishName)}, ${esc(chap.englishNameTranslation)}</p></div>
+  <details><summary>Reading settings</summary><div class="opts">
+  <label>Arabic size (<span id="sz">${S.size}</span>px)<input type="range" id="size" min="24" max="64" value="${S.size}" style="width:100%"></label>
+  <label>Reciter<select id="rec">${recs.map(r=>`<option value="${esc(r.identifier)}" ${r.identifier===S.rec?"selected":""}>${esc(r.englishName)}</option>`).join("")}</select></label>
+  <fieldset style="border:0;padding:0;margin:0"><legend>Translations</legend>${trs.map(t=>`<label><input type="checkbox" class="trc" value="${esc(t.identifier)}" ${S.tr.includes(t.identifier)?"checked":""}> ${esc(t.englishName)} <span class="mute">(${t.language==="ur"?"Urdu":"English"})</span></label>`).join("")}</fieldset>
+  <div><label><input type="checkbox" id="st" ${S.trans?"checked":""}> Show translations</label></div></div></details>
+  <p id="msg" class="err" role="status" hidden></p>
+  <div id="verses">${V.map(v=>{
+    const t=S.trans?v.tr.map(x=>`<p class="tr ${x.ed.language==="ur"?"ur":""}">${esc(x.text)}<cite>${esc(x.ed.englishName)}</cite></p>`).join(""):"";
+    return `<article class="v" id="v${v.n}" data-k="${v.key}"><p class="ar" lang="ar" style="font-size:${S.size}px">${esc(v.text)} <span style="color:var(--gold);font-size:.6em">﴿${v.n}﴾</span></p>${t}
+    <div class="acts"><span class="mute">${v.key}</span><button data-a="play">Play</button><button data-a="bm" aria-pressed="${bm.includes(v.key)}">${bm.includes(v.key)?"Bookmarked":"Bookmark"}</button><button data-a="copy">Copy</button><button data-a="share">Share</button></div></article>`}).join("")}</div>
+  <nav class="nav">${id>1?`<a href="#/surah/${id-1}"><button>Previous surah</button></a>`:"<span></span>"}${id<114?`<a href="#/surah/${id+1}"><button>Next surah</button></a>`:""}</nav>`;
+  $("#player").hidden=false;$("#now").textContent="Choose a verse to play";
+  $("#size").oninput=e=>{S.size=+e.target.value;$("#sz").textContent=S.size;document.querySelectorAll(".v .ar").forEach(p=>p.style.fontSize=S.size+"px");save()};
+  $("#st").onchange=e=>{S.trans=e.target.checked;save();surah(id)};
+  $("#rec").onchange=e=>{S.rec=e.target.value;save();loadAudio(id)};
+  document.querySelectorAll(".trc").forEach(c=>c.onchange=()=>{S.tr=[...document.querySelectorAll(".trc:checked")].map(x=>x.value);save();surah(id)});
+  $("#verses").onclick=e=>{const b=e.target.closest("button");if(!b)return;const k=b.closest(".v").dataset.k,v=V.find(x=>x.key===k);
+    if(b.dataset.a==="play")play(k);
+    if(b.dataset.a==="bm"){let l=LS.get("bookmarks",[]);l=l.includes(k)?l.filter(x=>x!==k):[...l,k];LS.set("bookmarks",l);b.textContent=l.includes(k)?"Bookmarked":"Bookmark";b.setAttribute("aria-pressed",l.includes(k))}
+    if(b.dataset.a==="copy")copyV(v,b);
+    if(b.dataset.a==="share"){const u=location.href.split("#")[0]+"#/surah/"+id+"/"+v.n;navigator.share?navigator.share({title:"Quran "+k,url:u}).catch(()=>{}):copyV(v,b)}};
+  loadAudio(id);
+  if(verse)document.getElementById("v"+verse)?.scrollIntoView({block:"center"});else scrollTo(0,0);
+}
+function copyV(v,b){navigator.clipboard.writeText(`${v.text}\n\n${v.tr.map(x=>x.text).join("\n")}\n(Quran ${v.key})`).then(()=>{const o=b.textContent;b.textContent="Copied";setTimeout(()=>b.textContent=o,1200)})}
+function msg(t){const m=$("#msg");if(!m)return;m.hidden=!t;m.textContent=t||""}
+async function loadAudio(id){audioMap={};msg("");
+  try{const d=await get(`/surah/${id}/${S.rec}`);audioMap=Object.fromEntries(d.ayahs.map(a=>[id+":"+a.numberInSurah,a.audio]))}
+  catch{msg("Audio is unavailable for this reciter.")}}
+function play(k){const u=audioMap[k];if(!u){msg("No audio for this verse.");return}
+  active=k;au.src=u;au.playbackRate=+$("#rate").value;au.play().catch(()=>msg("Playback was blocked. Press play again."));
+  document.querySelectorAll(".v").forEach(e=>e.classList.toggle("on",e.dataset.k===k));
+  const n=+k.split(":")[1];document.getElementById("v"+n)?.scrollIntoView({behavior:"smooth",block:"center"});
+  $("#now").textContent="Verse "+k;LS.set("progress",{surah:chap.number,verse:n})}
+function step(d){const i=V.findIndex(v=>v.key===active);if(V[i+d])play(V[i+d].key)}
+$("#prev").onclick=()=>step(-1);$("#next").onclick=()=>step(1);
+$("#pp").onclick=()=>au.paused?au.play():au.pause();
+$("#rate").onchange=e=>au.playbackRate=+e.target.value;
+au.onended=()=>$("#loop").checked&&active?play(active):step(1);
+au.onerror=()=>msg("This recitation file could not be loaded.");
+
+/* ---------- Bookmarks ---------- */
+function bookmarks(){
+  const l=LS.get("bookmarks",[]),p=LS.get("progress",null);
+  app.innerHTML=`<h1>Bookmarks</h1>${p?`<a class="cont" href="#/surah/${p.surah}/${p.verse}"><b>Continue at ${p.surah}:${p.verse}</b></a>`:""}
+  ${l.length?`<ul class="grid" style="margin-top:20px">${l.map(k=>{const [s,v]=k.split(":");return `<li><a class="s" href="#/surah/${s}/${v}"><span class="t"><b>Surah ${s}, verse ${v}</b></span></a></li>`}).join("")}</ul>`:'<p class="mute" style="margin-top:20px">No bookmarks yet. Open a surah and select Bookmark on any verse.</p>'}`;
+}
+
+/* ---------- Router ---------- */
+async function route(){
+  au.pause();$("#player").hidden=true;
+  const [,page,a,b]=location.hash.split("/");
+  try{if(page==="surah")await surah(+a,+b||0);else if(page==="bookmarks")bookmarks();else await home()}catch(e){fail(e)}
+}
+addEventListener("hashchange",route);route();
+</script>
+</body>
+</html>
